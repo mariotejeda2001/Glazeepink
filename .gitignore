@@ -1,0 +1,17 @@
+# Dependencias (son muy pesadas, no se suben)
+node_modules
+server/node_modules
+node_modules
+/node_modules
+dist
+build
+.env
+server/.env
+package-lock.json
+
+# Archivos de entorno (claves secretas)
+
+
+# Archivos de sistema/logs
+.DS_Store
+npm-debug.log
