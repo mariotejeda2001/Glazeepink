@@ -166,7 +166,7 @@ export function CartPage({ onNavigate }: CartPageProps) {
                 <Checkbox
                   id="gift"
                   checked={isGift}
-                  onCheckedChange={(checked) => setIsGift(checked as boolean)}
+                  onCheckedChange={(checked: boolean) => setIsGift(checked)}
                 />
                 <label
                   htmlFor="gift"
@@ -195,7 +195,7 @@ export function CartPage({ onNavigate }: CartPageProps) {
           <Checkbox
             id="gift-mobile"
             checked={isGift}
-            onCheckedChange={(checked) => setIsGift(checked as boolean)}
+            onCheckedChange={(checked: boolean) => setIsGift(checked)}
           />
           <label
             htmlFor="gift-mobile"

@@ -7,7 +7,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 // Tu clave pública de Stripe (Test mode)
-const stripePromise = loadStripe("");
+const stripePromise = loadStripe("pk_test_51SQgDABcfT5UmNPbd6qeSGBPJB4k1k1BInaFth2HsiqDkntelgdHvzFkdTIypf4cYVz3lDjGwbuNNftaYfKzcUDj00dL8OvBlJ");
 
 // Componente del Formulario de Pago
 function PaymentForm({ amount, onSuccess }: { amount: number, onSuccess: () => void }) {
