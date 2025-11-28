@@ -56,7 +56,7 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (page: string) => voi
   useEffect(() => {
     if (subtotal > 0) {
       // Solicitar PaymentIntent al backend
-      fetch("https://glazee.onrender.com", {
+      fetch("https://glazee.onrender.com/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: subtotal }),
