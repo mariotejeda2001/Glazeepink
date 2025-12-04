@@ -1,28 +1,72 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { PrismaClient } = require('@prisma/client'); // Importar el cliente de BD
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+const prisma = new PrismaClient();
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-app.post('/create-payment-intent', async (req, res) => {
-      const { amount } = req.body;
+// --- RUTAS DE PRODUCTOS (API) ---
 
-      try {
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: amount * 100, 
-          currency: 'mxn',
-          // CAMBIO AQUÍ: Usamos 'payment_method_types' en lugar de 'automatic_payment_methods'
-          payment_method_types: ['card'], 
-          // automatic_payment_methods: { enabled: true }, <--- Comenta o borra esto
-        });
+// 1. Obtener todos los productos (con filtro opcional por categoría)
+app.get('/api/products', async (req, res) => {
+  const { category } = req.query;
+  try {
+    // Si viene ?category=Postres en la URL, filtra. Si no, trae todo.
+    const where = category ? { category } : {};
+    
+    const products = await prisma.product.findMany({
+      where: where,
+      orderBy: { id: 'asc' } // Ordenar por ID para consistencia
+    });
+    
+    res.json(products);
+  } catch (error) {
+    console.error("Error al obtener productos:", error);
+    res.status(500).json({ error: "Error interno del servidor al obtener productos" });
+  }
+});
 
-        res.send({ clientSecret: paymentIntent.client_secret });
-      } catch (error) {
-        res.status(500).send({ error: error.message });
-      }
+// 2. Obtener un solo producto por ID (para la página de detalles)
+app.get('/api/products/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: parseInt(id) }
     });
 
-app.listen(4242, () => console.log('Backend corriendo en puerto 4242'));
+    if (!product) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    res.json(product);
+  } catch (error) {
+    console.error("Error al buscar producto:", error);
+    res.status(500).json({ error: "Error al buscar el producto" });
+  }
+});
+
+// --- RUTA DE PAGOS (STRIPE) ---
+app.post('/create-payment-intent', async (req, res) => {
+  const { amount } = req.body;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount * 100, // Stripe usa centavos
+      currency: 'mxn',
+      payment_method_types: ['card'],
+    });
+
+    res.send({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Iniciar servidor
+const PORT = process.env.PORT || 4242;
+app.listen(PORT, () => console.log(`🚀 Backend listo en puerto ${PORT}`));
