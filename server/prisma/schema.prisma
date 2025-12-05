@@ -1,4 +1,5 @@
 // server/prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,17 +10,61 @@ datasource db {
 }
 
 model Product {
-  id              Int      @id @default(autoincrement())
+  id              Int         @id @default(autoincrement())
   name            String
   description     String
-  longDescription String?  // Para el detalle largo
+  longDescription String?
   price           Float
-  images          String[] // Array de URLs de imágenes
-  category        String   // "Pastelería", "Postres"
-  flavors         String[] // ["Chocolate", "Vainilla"]
-  rating          Float    @default(5.0)
-  reviews         Int      @default(0)
+  images          String[]
+  category        String
+  flavors         String[]
+  rating          Float       @default(5.0)
+  reviews         Int         @default(0)
   servings        Int?
   ingredients     String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime    @default(now())
+  
+  // Relación con los items de las órdenes (Nuevo)
+  orderItems      OrderItem[]
+}
+
+// --- NUEVOS MODELOS ---
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  
+  // Un usuario puede tener muchas órdenes
+  orders    Order[]
+}
+
+model Order {
+  id        Int         @id @default(autoincrement())
+  createdAt DateTime    @default(now())
+  total     Float
+  status    String      @default("pagado") // "pagado", "pendiente", "enviado"
+  
+  // Relación con Usuario
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id])
+  
+  // Relación con los items comprados
+  items     OrderItem[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  quantity  Int
+  price     Float   // Guardamos el precio al momento de la compra
+  
+  // Relación con la Orden
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id])
+  
+  // Relación con el Producto
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
 }

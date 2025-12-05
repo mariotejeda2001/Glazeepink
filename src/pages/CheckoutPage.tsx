@@ -1,5 +1,7 @@
+// src/pages/CheckoutPage.tsx
 import { useState, useEffect } from "react";
 import { useCart } from "../contexts/CartContext";
+import { useAuth } from "../contexts/AuthContext"; // Importamos el Auth
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { toast } from "sonner";
@@ -10,7 +12,7 @@ import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-
 const stripePromise = loadStripe("pk_test_51SQgDABcfT5UmNPbd6qeSGBPJB4k1k1BInaFth2HsiqDkntelgdHvzFkdTIypf4cYVz3lDjGwbuNNftaYfKzcUDj00dL8OvBlJ");
 
 // Componente del Formulario de Pago
-function PaymentForm({ amount, onSuccess }: { amount: number, onSuccess: () => void }) {
+function PaymentForm({ amount, onSuccess }: { amount: number, onSuccess: () => Promise<void> }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -22,20 +24,23 @@ function PaymentForm({ amount, onSuccess }: { amount: number, onSuccess: () => v
 
     setIsProcessing(true);
 
-    const { error } = await stripe.confirmPayment({
+    // Confirmar el pago con Stripe
+    const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: window.location.origin, // Redirecciona aquí tras el pago
+        return_url: window.location.origin, 
       },
-      redirect: "if_required", // Evita redirección si no es necesaria (tarjetas)
+      redirect: "if_required", // Evita redirección forzosa si no es necesaria
     });
 
     if (error) {
       toast.error(error.message);
-    } else {
-      onSuccess();
+      setIsProcessing(false);
+    } else if (paymentIntent && paymentIntent.status === "succeeded") {
+      // Si Stripe dice "Éxito", guardamos la orden en nuestra BD
+      await onSuccess();
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
   };
 
   return (
@@ -51,32 +56,63 @@ function PaymentForm({ amount, onSuccess }: { amount: number, onSuccess: () => v
 // Página Principal de Checkout
 export function CheckoutPage({ onNavigate }: { onNavigate: (page: string) => void }) {
   const { items, subtotal, clearCart } = useCart();
+  const { token } = useAuth(); // Necesitamos el token para guardar la orden
   const [clientSecret, setClientSecret] = useState("");
 
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4242';
+
+  // Obtener la intención de pago al cargar
   useEffect(() => {
     if (subtotal > 0) {
-      // Solicitar PaymentIntent al backend
-      fetch("https://glazee.onrender.com/create-payment-intent", {
+      fetch(`${apiUrl}/create-payment-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: subtotal }),
       })
         .then((res) => res.json())
-        .then((data) => setClientSecret(data.clientSecret));
+        .then((data) => setClientSecret(data.clientSecret))
+        .catch(err => console.error("Error Stripe:", err));
     }
   }, [subtotal]);
 
-  const handleSuccess = () => {
-    toast.success("¡Pago realizado con éxito!");
-    clearCart();
-    setTimeout(() => onNavigate("home"), 2000);
+  // Función que se ejecuta DESPUÉS de que Stripe cobra el dinero
+  const handleOrderSuccess = async () => {
+    try {
+      // 1. Guardar la orden en nuestra base de datos (PostgreSQL)
+      const response = await fetch(`${apiUrl}/api/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // ¡Importante! Enviamos el token
+        },
+        body: JSON.stringify({
+          items: items.filter(i => i.selected), // Solo enviamos lo seleccionado
+          total: subtotal
+        })
+      });
+
+      if (!response.ok) throw new Error("Error al guardar la orden en el servidor");
+
+      // 2. Éxito total
+      toast.success("¡Pago exitoso! Tu orden ha sido guardada.");
+      clearCart();
+      
+      // 3. Redirigir (Pronto cambiaremos esto a 'orders')
+      setTimeout(() => onNavigate("home"), 2000);
+
+    } catch (error) {
+      console.error(error);
+      toast.error("El pago se procesó, pero hubo un error guardando el historial. Contáctanos.");
+    }
   };
 
-  if (items.length === 0) {
+  const selectedItemsCount = items.filter(i => i.selected).length;
+
+  if (selectedItemsCount === 0) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center px-4">
-        <h1 className="mb-4">Carrito vacío</h1>
-        <Button onClick={() => onNavigate('products')}>Volver a comprar</Button>
+        <h1 className="mb-4">No hay productos seleccionados</h1>
+        <Button onClick={() => onNavigate('cart')}>Volver al Carrito</Button>
       </div>
     );
   }
@@ -91,7 +127,7 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (page: string) => voi
           <CardHeader><CardTitle>Resumen</CardTitle></CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">${subtotal} MXN</p>
-            <p className="text-muted-foreground">{items.length} productos</p>
+            <p className="text-muted-foreground">{selectedItemsCount} productos seleccionados</p>
           </CardContent>
         </Card>
 
@@ -101,10 +137,10 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (page: string) => voi
           <CardContent>
             {clientSecret ? (
               <Elements stripe={stripePromise} options={{ clientSecret }}>
-                <PaymentForm amount={subtotal} onSuccess={handleSuccess} />
+                <PaymentForm amount={subtotal} onSuccess={handleOrderSuccess} />
               </Elements>
             ) : (
-              <p>Cargando pasarela de pago...</p>
+              <div className="text-center py-4">Cargando pasarela de pago...</div>
             )}
           </CardContent>
         </Card>
